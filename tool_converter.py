@@ -105,6 +105,39 @@ def tool_use_to_text(tool_use: Dict[str, Any]) -> str:
     input_json = json.dumps(input_data, ensure_ascii=False)
     return f"<tool_use id=\"{tool_id}\">\n<name>{name}</name>\n<input>{input_json}</input>\n</tool_use>"
 
+def merge_consecutive_messages(messages: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
+    """
+    Merge consecutive messages with the same role to ensure strict alternation.
+    This prevents infinite loops caused by multiple user messages in a row.
+    """
+    if not messages:
+        return []
+
+    result = []
+    pending_contents = []
+    pending_role = None
+
+    for msg in messages:
+        role = msg.get("role", "user")
+        content = msg.get("content", "")
+
+        if role == pending_role:
+            # Same role, accumulate content
+            if content:
+                pending_contents.append(content)
+        else:
+            # Different role, flush pending
+            if pending_role and pending_contents:
+                result.append({"role": pending_role, "content": "\n\n".join(pending_contents)})
+            pending_role = role
+            pending_contents = [content] if content else []
+
+    # Flush remaining
+    if pending_role and pending_contents:
+        result.append({"role": pending_role, "content": "\n\n".join(pending_contents)})
+
+    return result
+
 def convert_messages_simple(messages: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
     """
     Convert messages without embedding tools (tools are set via REST API).
@@ -144,7 +177,8 @@ def convert_messages_simple(messages: List[Dict[str, Any]]) -> List[Dict[str, An
             if parts:
                 result.append({"role": "user", "content": "\n".join(parts)})
 
-    return result
+    # Merge consecutive messages with same role to ensure strict alternation
+    return merge_consecutive_messages(result)
 
 def convert_messages_with_tools(
     messages: List[Dict[str, Any]],
@@ -204,7 +238,8 @@ def convert_messages_with_tools(
             if parts:
                 result.append({"role": "user", "content": "\n".join(parts)})
 
-    return result
+    # Merge consecutive messages with same role to ensure strict alternation
+    return merge_consecutive_messages(result)
 
 # Regex patterns for parsing tool calls
 TOOL_USE_PATTERN = re.compile(
