@@ -105,6 +105,47 @@ def tool_use_to_text(tool_use: Dict[str, Any]) -> str:
     input_json = json.dumps(input_data, ensure_ascii=False)
     return f"<tool_use id=\"{tool_id}\">\n<name>{name}</name>\n<input>{input_json}</input>\n</tool_use>"
 
+def convert_messages_simple(messages: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
+    """
+    Convert messages without embedding tools (tools are set via REST API).
+    Only converts tool_use/tool_result blocks to text format.
+    """
+    result = []
+    seen_tool_result_ids = set()
+
+    for msg in messages:
+        role = msg.get("role", "user")
+        content = msg.get("content", "")
+
+        text_content, tool_blocks = convert_message_content(content)
+
+        if role == "assistant":
+            parts = []
+            if text_content:
+                parts.append(text_content)
+            for block in tool_blocks:
+                if block.get("type") == "tool_use":
+                    parts.append(tool_use_to_text(block))
+            if parts:
+                result.append({"role": "assistant", "content": "\n".join(parts)})
+
+        elif role == "user":
+            parts = []
+            if text_content:
+                parts.append(text_content)
+            for block in tool_blocks:
+                if block.get("type") == "tool_result":
+                    tool_use_id = block.get("tool_use_id", "")
+                    if tool_use_id and tool_use_id in seen_tool_result_ids:
+                        continue
+                    if tool_use_id:
+                        seen_tool_result_ids.add(tool_use_id)
+                    parts.append(tool_result_to_text(block))
+            if parts:
+                result.append({"role": "user", "content": "\n".join(parts)})
+
+    return result
+
 def convert_messages_with_tools(
     messages: List[Dict[str, Any]],
     tools: Optional[List[Dict[str, Any]]] = None,

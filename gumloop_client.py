@@ -4,13 +4,50 @@ import uuid
 import asyncio
 from typing import Optional, Dict, Any, List, AsyncGenerator
 import websockets
+import httpx
 from auth import get_auth
 
 WS_URL = "wss://ws.gumloop.com/ws/gummies"
+API_BASE = "https://api.gumloop.com"
 
 def _get_proxy() -> Optional[str]:
     """Get proxy URL from environment."""
     return os.getenv("HTTP_PROXY", "").strip() or None
+
+async def update_gummie_config(
+    gummie_id: str,
+    system_prompt: Optional[str] = None,
+    tools: Optional[List[Dict]] = None,
+    model_name: Optional[str] = None
+) -> Dict[str, Any]:
+    """Update gummie configuration via REST API before chat."""
+    auth = get_auth()
+    await auth.get_token()  # Ensure token is valid
+    user_id = auth.user_id
+
+    if not user_id:
+        raise ValueError("User ID not available. Please login first.")
+
+    payload = {}
+    if system_prompt is not None:
+        payload["system_prompt"] = system_prompt
+    if tools is not None:
+        payload["tools"] = tools
+    if model_name is not None:
+        payload["model_name"] = model_name
+
+    if not payload:
+        return {}  # Nothing to update
+
+    proxy = _get_proxy()
+    async with httpx.AsyncClient(proxy=proxy, timeout=30.0) as client:
+        resp = await client.patch(
+            f"{API_BASE}/gummies/{gummie_id}",
+            json=payload,
+            headers={"x-auth-key": user_id, "content-type": "application/json"}
+        )
+        resp.raise_for_status()
+        return resp.json()
 
 async def send_chat(
     gummie_id: str,

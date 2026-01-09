@@ -16,7 +16,7 @@ from dotenv import load_dotenv
 from gumloop_types import (
     ClaudeRequest, ChatCompletionRequest, ResponsesRequest, GeminiRequest
 )
-from gumloop_client import send_chat, GumloopStreamHandler
+from gumloop_client import send_chat, GumloopStreamHandler, update_gummie_config
 from gumloop_parser import (
     build_message_start, build_content_block_start, build_content_block_delta,
     build_content_block_stop, build_ping, build_message_delta, build_message_stop,
@@ -24,7 +24,7 @@ from gumloop_parser import (
     build_tool_use_start, build_tool_use_delta
 )
 from tool_converter import (
-    convert_messages_with_tools, parse_tool_calls, detect_tool_loop
+    convert_messages_with_tools, convert_messages_simple, parse_tool_calls, detect_tool_loop
 )
 from auth import get_auth
 import db
@@ -150,25 +150,54 @@ async def claude_messages(req: ClaudeRequest, _: str = Depends(verify_key)):
         if loop_error:
             raise HTTPException(400, loop_error)
 
-    # Convert messages with tool support
+    # Extract system prompt
     sys_text = None
     if req.system:
         sys_text = req.system if isinstance(req.system, str) else "\n".join(
             b.get("text", "") for b in req.system if isinstance(b, dict) and b.get("type") == "text"
         )
 
-    tools = [{"name": t.name, "description": t.description, "input_schema": t.input_schema} for t in req.tools] if req.tools else None
-    messages = convert_messages_with_tools(
-        [{"role": m.role, "content": m.content} for m in req.messages],
-        tools=tools,
-        system=sys_text
-    )
-
-    validate_messages(messages)
+    # Update gummie config via REST API (tools and system_prompt are set on the agent)
     model = map_model(req.model)
+    has_tools = bool(req.tools)
+
+    if req.tools or req.system:
+        tools_for_gumloop = None
+        if req.tools:
+            tools_for_gumloop = [
+                {"name": t.name, "description": t.description or "", "input_schema": t.input_schema}
+                for t in req.tools
+            ]
+        try:
+            await update_gummie_config(
+                gummie_id=gummie_id,
+                system_prompt=sys_text,
+                tools=tools_for_gumloop,
+                model_name=model
+            )
+        except Exception as e:
+            # Log error but continue - fallback to text-based tools
+            import logging
+            logging.warning(f"Failed to update gummie config: {e}, falling back to text-based tools")
+            # Use old method as fallback
+            messages = convert_messages_with_tools(
+                [{"role": m.role, "content": m.content} for m in req.messages],
+                tools=[{"name": t.name, "description": t.description, "input_schema": t.input_schema} for t in req.tools] if req.tools else None,
+                system=sys_text
+            )
+            validate_messages(messages)
+            return await _process_chat(gummie_id, messages, model, req, has_tools)
+
+    # Convert messages without embedding tools (tools are set via REST API)
+    messages = convert_messages_simple([{"role": m.role, "content": m.content} for m in req.messages])
+    validate_messages(messages)
+
+    return await _process_chat(gummie_id, messages, model, req, has_tools)
+
+async def _process_chat(gummie_id: str, messages: List[Dict], model: str, req: ClaudeRequest, has_tools: bool):
+    """Process chat request and return response."""
     msg_id = f"msg_{uuid.uuid4().hex[:24]}"
     thinking_enabled = bool(req.thinking and req.thinking.get("type") == "enabled")
-    has_tools = bool(req.tools)
 
     if req.stream:
         async def stream_gen():
