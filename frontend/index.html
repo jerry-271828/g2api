@@ -1,0 +1,452 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8"/>
+  <title>G2API 控制台</title>
+  <meta name="viewport" content="width=device-width,initial-scale=1"/>
+  <style>
+    :root {
+      --bg:#0a0e1a;
+      --panel:#0f1420;
+      --muted:#8b95a8;
+      --text:#e8f0ff;
+      --accent:#4f8fff;
+      --danger:#ff4757;
+      --ok:#2ed573;
+      --border:#1a2332;
+    }
+    * { box-sizing:border-box; }
+    html, body { height:100%; margin:0; }
+    body {
+      padding:0 0 40px;
+      background:radial-gradient(ellipse at top, #0f1624 0%, #0a0e1a 100%);
+      color:var(--text);
+      font-family:ui-sans-serif,system-ui,-apple-system,Segoe UI,Roboto,sans-serif;
+      line-height:1.6;
+    }
+    h1 { font-size:28px; margin:24px 0 12px; background:linear-gradient(135deg,#4f8fff,#7b9fff); -webkit-background-clip:text; -webkit-text-fill-color:transparent; }
+    h2 { font-size:18px; margin:20px 0 16px; color:#c5d4ff; }
+    .container { max-width:1280px; margin:0 auto; padding:20px; }
+    .panel {
+      background:linear-gradient(145deg,rgba(15,20,32,.8),rgba(10,14,26,.9));
+      border:1px solid var(--border);
+      border-radius:16px;
+      padding:24px;
+      box-shadow:0 20px 60px rgba(0,0,0,.4);
+      margin-bottom:20px;
+    }
+    .row { display:flex; gap:12px; align-items:center; flex-wrap:wrap; }
+    label { color:var(--muted); font-size:13px; }
+    .field { display:flex; flex-direction:column; gap:8px; flex:1; min-width:200px; }
+    input,textarea,select {
+      background:rgba(12,16,28,.6);
+      color:var(--text);
+      border:1px solid var(--border);
+      border-radius:12px;
+      padding:12px 14px;
+      outline:none;
+      font-size:14px;
+    }
+    input:focus,textarea:focus,select:focus { border-color:var(--accent); }
+    textarea { min-height:100px; resize:vertical; font-family:monospace; }
+    button {
+      background:linear-gradient(135deg,#2563eb,#1e40af);
+      color:#fff;
+      border:none;
+      border-radius:12px;
+      padding:12px 20px;
+      font-weight:600;
+      font-size:14px;
+      cursor:pointer;
+    }
+    button:hover { transform:translateY(-1px); }
+    button:disabled { opacity:.5; cursor:not-allowed; }
+    .btn-secondary { background:linear-gradient(135deg,#1e293b,#0f172a); }
+    .btn-danger { background:linear-gradient(135deg,#dc2626,#991b1b); }
+    .list { max-height:500px; overflow:auto; }
+    .card {
+      border:1px solid var(--border);
+      border-radius:14px;
+      padding:16px;
+      background:rgba(12,19,34,.6);
+      margin-bottom:12px;
+    }
+    .mono { font-family:monospace; }
+    .code {
+      background:#0d1218;
+      border:1px solid var(--border);
+      border-radius:12px;
+      padding:14px;
+      max-height:300px;
+      overflow:auto;
+      white-space:pre-wrap;
+      font-size:13px;
+    }
+    .muted { color:var(--muted); }
+    .chip {
+      display:inline-flex;
+      padding:4px 10px;
+      background:rgba(20,27,40,.8);
+      border:1px solid var(--border);
+      border-radius:20px;
+      color:#a8b8ff;
+      font-size:12px;
+    }
+    .switch { position:relative; display:inline-block; width:50px; height:26px; }
+    .switch input { opacity:0; width:0; height:0; }
+    .slider {
+      position:absolute;
+      cursor:pointer;
+      top:0;left:0;right:0;bottom:0;
+      background:#374151;
+      border-radius:26px;
+    }
+    .slider:before {
+      position:absolute;
+      content:"";
+      height:20px;
+      width:20px;
+      left:3px;
+      bottom:3px;
+      background:#f3f4f6;
+      border-radius:50%;
+      transition:.3s;
+    }
+    input:checked+.slider { background:#3b82f6; }
+    input:checked+.slider:before { transform:translateX(24px); }
+    .tabs { display:flex; gap:8px; margin:20px 0 16px; border-bottom:2px solid var(--border); }
+    .tab { padding:12px 24px; background:transparent; border:none; color:var(--muted); font-weight:600; cursor:pointer; border-bottom:2px solid transparent; margin-bottom:-2px; }
+    .tab:hover { color:var(--text); }
+    .tab.active { color:var(--accent); border-bottom-color:var(--accent); }
+    .tab-content { display:none; }
+    .tab-content.active { display:block; }
+    .kvs { display:grid; grid-template-columns:120px 1fr; gap:8px; font-size:13px; }
+    .right { margin-left:auto; }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <h1>G2API 控制台</h1>
+
+    <div class="tabs">
+      <button class="tab active" onclick="switchTab('accounts')">账号管理</button>
+      <button class="tab" onclick="switchTab('gumloop')">Gumloop登录</button>
+      <button class="tab" onclick="switchTab('create')">手动创建</button>
+      <button class="tab" onclick="switchTab('chat')">Chat测试</button>
+    </div>
+
+    <div id="tab-accounts" class="tab-content active">
+      <div class="panel">
+        <h2>账号管理 <span id="accountCount" class="muted"></span></h2>
+        <div class="row">
+          <button class="btn-secondary" onclick="loadAccounts()">刷新列表</button>
+          <label><input type="radio" name="filter" value="all" checked onchange="loadAccounts()"> 全部</label>
+          <label><input type="radio" name="filter" value="enabled" onchange="loadAccounts()"> 已启用</label>
+          <label><input type="radio" name="filter" value="disabled" onchange="loadAccounts()"> 已禁用</label>
+        </div>
+        <div class="list" id="accounts"></div>
+      </div>
+    </div>
+
+    <div id="tab-gumloop" class="tab-content">
+      <div class="panel">
+        <h2>Gumloop 账号登录</h2>
+        <p class="muted">使用 Gumloop 邮箱和密码登录，自动创建账号</p>
+        <div class="row">
+          <div class="field"><label>Email</label><input id="gl_email" type="email" placeholder="your@email.com"/></div>
+          <div class="field"><label>Password</label><input id="gl_password" type="password" placeholder="Gumloop密码"/></div>
+        </div>
+        <div class="row">
+          <div class="field"><label>Label (可选)</label><input id="gl_label" placeholder="账号标签"/></div>
+          <div class="field"><label>Gummie ID (可选)</label><input id="gl_gummie_id" placeholder="留空使用默认"/></div>
+          <div class="field" style="max-width:180px">
+            <label>启用</label>
+            <label class="switch">
+              <input id="gl_enabled" type="checkbox" checked />
+              <span class="slider"></span>
+            </label>
+          </div>
+        </div>
+        <div class="row">
+          <button onclick="gumloopLogin()">登录并创建账号</button>
+        </div>
+        <div class="field" style="margin-top:16px">
+          <label>结果</label>
+          <pre class="code mono" id="gl_result">等待登录...</pre>
+        </div>
+      </div>
+    </div>
+
+    <div id="tab-create" class="tab-content">
+      <div class="panel">
+        <h2>创建账号</h2>
+        <div class="row">
+          <div class="field"><label>label</label><input id="new_label" placeholder="账号标签"/></div>
+          <div class="field"><label>api_key</label><input id="new_api_key" placeholder="Gumloop API Key"/></div>
+          <div class="field"><label>gummie_id</label><input id="new_gummie_id" placeholder="Gummie ID"/></div>
+        </div>
+        <div class="row">
+          <div class="field">
+            <label>other (JSON)</label>
+            <textarea id="new_other" placeholder='{"note":"备注"}'></textarea>
+          </div>
+          <div class="field" style="max-width:180px">
+            <label>启用</label>
+            <label class="switch">
+              <input id="new_enabled" type="checkbox" checked />
+              <span class="slider"></span>
+            </label>
+          </div>
+        </div>
+        <div class="row">
+          <button onclick="createAccount()">创建</button>
+        </div>
+      </div>
+    </div>
+
+    <div id="tab-chat" class="tab-content">
+      <div class="panel">
+        <h2>Chat 测试</h2>
+        <div class="row">
+          <div class="field" style="max-width:250px">
+            <label>model</label>
+            <input id="model" value="claude-sonnet-4-5" />
+          </div>
+          <div class="field" style="max-width:150px">
+            <label>stream</label>
+            <select id="stream">
+              <option value="false">false</option>
+              <option value="true">true</option>
+            </select>
+          </div>
+          <button class="right" onclick="send()">发送</button>
+        </div>
+        <div class="field">
+          <label>messages (JSON)</label>
+          <textarea id="messages">[{"role":"user","content":"Hello, tell me a short joke"}]</textarea>
+        </div>
+        <div class="field">
+          <label>响应</label>
+          <pre class="code mono" id="out"></pre>
+        </div>
+      </div>
+    </div>
+  </div>
+
+<script>
+function switchTab(name) {
+  document.querySelectorAll('.tab').forEach(t => t.classList.remove('active'));
+  document.querySelectorAll('.tab-content').forEach(c => c.classList.remove('active'));
+  event.target.classList.add('active');
+  document.getElementById('tab-' + name).classList.add('active');
+}
+
+function getAuthPassword() { return localStorage.getItem('adminPassword'); }
+function getAuthHeaders() {
+  const p = getAuthPassword();
+  return p ? { 'Authorization': `Bearer ${p}` } : {};
+}
+
+async function authFetch(url, options = {}) {
+  const headers = { ...getAuthHeaders(), ...options.headers };
+  const r = await fetch(url, { ...options, headers });
+  if (r.status === 401) {
+    localStorage.removeItem('adminPassword');
+    window.location.href = '/login';
+    throw new Error('Unauthorized');
+  }
+  return r;
+}
+
+function createAccountCard(acc) {
+  const card = document.createElement('div');
+  card.className = 'card';
+
+  const header = document.createElement('div');
+  header.className = 'row';
+  header.innerHTML = `
+    <strong>${acc.label || '(无标签)'}</strong>
+    <span class="chip mono">${acc.id}</span>
+    <div class="right" style="display:flex;gap:8px;align-items:center;">
+      <label class="muted">启用</label>
+      <label class="switch">
+        <input type="checkbox" ${acc.enabled ? 'checked' : ''} onchange="toggleAccount('${acc.id}', this.checked)"/>
+        <span class="slider"></span>
+      </label>
+      <button class="btn-danger" onclick="deleteAccount('${acc.id}')">删除</button>
+    </div>
+  `;
+  card.appendChild(header);
+
+  const meta = document.createElement('div');
+  meta.className = 'kvs mono';
+  meta.style.marginTop = '12px';
+  meta.innerHTML = `
+    <div class="muted">api_key</div><div>${acc.api_key ? '***' + acc.api_key.slice(-4) : '-'}</div>
+    <div class="muted">gummie_id</div><div>${acc.gummie_id || '-'}</div>
+    <div class="muted">success</div><div>${acc.success_count || 0}</div>
+    <div class="muted">error</div><div>${acc.error_count || 0}</div>
+    <div class="muted">created</div><div>${acc.created_at || '-'}</div>
+  `;
+  card.appendChild(meta);
+
+  return card;
+}
+
+async function loadAccounts() {
+  try {
+    const filter = document.querySelector('input[name="filter"]:checked')?.value || 'all';
+    let url = '/v2/accounts?';
+    if (filter === 'enabled') url += 'enabled=true';
+    else if (filter === 'disabled') url += 'enabled=false';
+
+    const r = await authFetch(url);
+    const j = await r.json();
+    document.getElementById('accountCount').textContent = `(${j.count})`;
+
+    const list = document.getElementById('accounts');
+    list.innerHTML = '';
+    if (!j.accounts || j.accounts.length === 0) {
+      list.innerHTML = '<div class="muted">暂无账号</div>';
+      return;
+    }
+    j.accounts.forEach(acc => list.appendChild(createAccountCard(acc)));
+  } catch(e) {
+    alert('加载失败: ' + e);
+  }
+}
+
+async function createAccount() {
+  const body = {
+    label: document.getElementById('new_label').value.trim() || null,
+    api_key: document.getElementById('new_api_key').value.trim() || null,
+    gummie_id: document.getElementById('new_gummie_id').value.trim() || null,
+    enabled: document.getElementById('new_enabled').checked,
+    other: (() => {
+      const t = document.getElementById('new_other').value.trim();
+      if (!t) return null;
+      try { return JSON.parse(t); } catch { alert('other 不是合法 JSON'); throw new Error('bad json'); }
+    })()
+  };
+  try {
+    const r = await authFetch('/v2/accounts', {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify(body)
+    });
+    if (!r.ok) throw new Error(await r.text());
+    await loadAccounts();
+    switchTab('accounts');
+  } catch(e) {
+    alert('创建失败: ' + e);
+  }
+}
+
+async function toggleAccount(id, enabled) {
+  try {
+    const r = await authFetch('/v2/accounts/' + id, {
+      method: 'PATCH',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({ enabled })
+    });
+    if (!r.ok) throw new Error(await r.text());
+  } catch(e) {
+    alert('更新失败: ' + e);
+    loadAccounts();
+  }
+}
+
+async function deleteAccount(id) {
+  if (!confirm('确认删除？')) return;
+  try {
+    const r = await authFetch('/v2/accounts/' + id, { method: 'DELETE' });
+    if (!r.ok) throw new Error(await r.text());
+    await loadAccounts();
+  } catch(e) {
+    alert('删除失败: ' + e);
+  }
+}
+
+async function gumloopLogin() {
+  const email = document.getElementById('gl_email').value.trim();
+  const password = document.getElementById('gl_password').value;
+  const result = document.getElementById('gl_result');
+
+  if (!email || !password) {
+    result.textContent = '请输入邮箱和密码';
+    return;
+  }
+
+  result.textContent = '正在登录...';
+
+  try {
+    const r = await authFetch('/v2/auth/gumloop', {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({
+        email,
+        password,
+        label: document.getElementById('gl_label').value.trim() || null,
+        gummie_id: document.getElementById('gl_gummie_id').value.trim() || null,
+        enabled: document.getElementById('gl_enabled').checked
+      })
+    });
+    const j = await r.json();
+    if (r.ok && j.success) {
+      result.textContent = '登录成功！\n' + JSON.stringify(j.account, null, 2);
+      await loadAccounts();
+    } else {
+      result.textContent = '登录失败: ' + (j.detail || j.message || JSON.stringify(j));
+    }
+  } catch(e) {
+    result.textContent = '登录失败: ' + e;
+  }
+}
+
+async function send() {
+  const model = document.getElementById('model').value.trim();
+  const stream = document.getElementById('stream').value === 'true';
+  const out = document.getElementById('out');
+  out.textContent = '';
+
+  let messages;
+  try { messages = JSON.parse(document.getElementById('messages').value); }
+  catch { out.textContent = 'messages 不是合法 JSON'; return; }
+
+  const body = { model, messages, stream };
+
+  if (!stream) {
+    const r = await authFetch('/v1/chat/completions', {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify(body)
+    });
+    const text = await r.text();
+    try { out.textContent = JSON.stringify(JSON.parse(text), null, 2); }
+    catch { out.textContent = text; }
+  } else {
+    const r = await authFetch('/v1/chat/completions', {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify(body)
+    });
+    const reader = r.body.getReader();
+    const decoder = new TextDecoder();
+    while (true) {
+      const {value, done} = await reader.read();
+      if (done) break;
+      out.textContent += decoder.decode(value, {stream:true});
+    }
+  }
+}
+
+window.addEventListener('DOMContentLoaded', () => {
+  if (!getAuthPassword()) {
+    window.location.href = '/login';
+    return;
+  }
+  loadAccounts();
+});
+</script>
+</body>
+</html>

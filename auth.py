@@ -8,6 +8,21 @@ FIREBASE_API_KEY = "AIzaSyCYuXqbJ0YBNltoGS4-7Y6Hozrra8KKmaE"
 FIREBASE_AUTH_URL = f"https://identitytoolkit.googleapis.com/v1/accounts:signInWithPassword?key={FIREBASE_API_KEY}"
 FIREBASE_REFRESH_URL = f"https://securetoken.googleapis.com/v1/token?key={FIREBASE_API_KEY}"
 
+def _get_proxy() -> Optional[str]:
+    """Get proxy URL from environment."""
+    return os.getenv("HTTP_PROXY", "").strip() or None
+
+def _get_http_client(timeout: float = 30.0) -> httpx.AsyncClient:
+    """Create httpx client with optional proxy support."""
+    proxy = _get_proxy()
+    if proxy:
+        mounts = {
+            "https://": httpx.AsyncHTTPTransport(proxy=proxy),
+            "http://": httpx.AsyncHTTPTransport(proxy=proxy),
+        }
+        return httpx.AsyncClient(mounts=mounts, timeout=timeout)
+    return httpx.AsyncClient(timeout=timeout)
+
 class GumloopAuth:
     def __init__(self, email: str, password: str):
         self.email = email
@@ -27,7 +42,7 @@ class GumloopAuth:
         }
         close_client = client is None
         if client is None:
-            client = httpx.AsyncClient(timeout=30.0)
+            client = _get_http_client()
         try:
             resp = await client.post(FIREBASE_AUTH_URL, json=payload)
             resp.raise_for_status()
@@ -48,7 +63,7 @@ class GumloopAuth:
         payload = {"grant_type": "refresh_token", "refresh_token": self.refresh_token}
         close_client = client is None
         if client is None:
-            client = httpx.AsyncClient(timeout=30.0)
+            client = _get_http_client()
         try:
             resp = await client.post(FIREBASE_REFRESH_URL, data=payload)
             resp.raise_for_status()

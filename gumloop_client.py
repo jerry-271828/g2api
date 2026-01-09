@@ -1,3 +1,4 @@
+import os
 import json
 import uuid
 import asyncio
@@ -6,6 +7,10 @@ import websockets
 from auth import get_auth
 
 WS_URL = "wss://ws.gumloop.com/ws/gummies"
+
+def _get_proxy() -> Optional[str]:
+    """Get proxy URL from environment."""
+    return os.getenv("HTTP_PROXY", "").strip() or None
 
 async def send_chat(
     gummie_id: str,
@@ -51,7 +56,19 @@ async def send_chat(
         }
     }
 
-    async with websockets.connect(WS_URL, additional_headers={"Origin": "https://www.gumloop.com"}) as ws:
+    # WebSocket connection with optional proxy
+    proxy = _get_proxy()
+    ws_kwargs = {"additional_headers": {"Origin": "https://www.gumloop.com"}}
+
+    if proxy:
+        # websockets library supports proxy via environment or explicit parameter
+        # For SOCKS proxy: pip install websockets[socks]
+        # For HTTP proxy: use websockets-proxy or set environment
+        import os
+        os.environ.setdefault("https_proxy", proxy)
+        os.environ.setdefault("http_proxy", proxy)
+
+    async with websockets.connect(WS_URL, **ws_kwargs) as ws:
         await ws.send(json.dumps(payload))
 
         async for message in ws:
@@ -77,9 +94,14 @@ class GumloopStreamHandler:
         self.in_reasoning = False
         self.message_started = False
         self.finished = False
+        self.response_ended = False  # Prevent processing after response ends
 
     def handle_event(self, event: Dict[str, Any]) -> Dict[str, Any]:
         """Process a single event and return normalized data."""
+        # Early return if response has already ended
+        if self.response_ended:
+            return {"type": "ignored", "reason": "response_ended"}
+
         event_type = event.get("type", "")
 
         if event_type == "step-start":
@@ -117,6 +139,7 @@ class GumloopStreamHandler:
 
         elif event_type == "finish":
             self.finished = True
+            self.response_ended = True  # Mark response as ended
             usage = event.get("usage", {})
             self.output_tokens = usage.get("output_tokens", len("".join(self.text_buffer)) // 4)
             self.input_tokens = usage.get("input_tokens", self.input_tokens)

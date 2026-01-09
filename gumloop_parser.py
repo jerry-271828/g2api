@@ -31,6 +31,20 @@ def build_content_block_delta(index: int, text: str, delta_type: str = "text_del
 def build_content_block_stop(index: int) -> str:
     return _sse_format("content_block_stop", {"type": "content_block_stop", "index": index})
 
+def build_tool_use_start(index: int, tool_id: str, name: str) -> str:
+    return _sse_format("content_block_start", {
+        "type": "content_block_start",
+        "index": index,
+        "content_block": {"type": "tool_use", "id": tool_id, "name": name, "input": {}}
+    })
+
+def build_tool_use_delta(index: int, input_json: str) -> str:
+    return _sse_format("content_block_delta", {
+        "type": "content_block_delta",
+        "index": index,
+        "delta": {"type": "input_json_delta", "partial_json": input_json}
+    })
+
 def build_ping() -> str:
     return _sse_format("ping", {"type": "ping"})
 
